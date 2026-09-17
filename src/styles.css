@@ -1,0 +1,85 @@
+@import url("https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Vazirmatn", "Segoe UI", Tahoma, sans-serif;
+  --font-display: "Vazirmatn", "Segoe UI", Tahoma, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --color-bg: #0b0d10;
+  --color-surface: #13161c;
+  --color-elevated: #1a1e26;
+  --color-muted: #1f242e;
+  --color-fg: #f1f2f4;
+  --color-muted-foreground: #9aa0a8;
+  --color-foreground: #f1f2f4;
+  --color-background: #0b0d10;
+  --color-card: #13161c;
+  --color-card-foreground: #f1f2f4;
+  --color-primary: #c5ccd6;
+  --color-primary-foreground: #0b0d10;
+  --color-secondary: #1a1e26;
+  --color-secondary-foreground: #e8eaed;
+  --color-border: rgb(241 242 244 / 12%);
+  --color-ring: #c5ccd6;
+  --color-ok: #7dba9a;
+  --color-ok-bg: rgb(125 186 154 / 16%);
+  --color-warn: #d4b07a;
+  --color-warn-bg: rgb(212 176 122 / 16%);
+  --color-danger: #d98986;
+  --color-danger-bg: rgb(217 137 134 / 16%);
+  --color-line: #8aa0b5;
+
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --motion-quick: 150ms;
+  --motion-fast: 250ms;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+    letter-spacing: -0.02em;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -6,6 +6,8 @@ import { processWorkbook, processTrips } from "./process";
 import { classifyRole, parseTimeToMinutes } from "./normalize";
 import { buildDriverReport } from "./driver-report";
 import { buildExportWorkbook } from "./export-workbook";
+import { cloneDefaultBook } from "./templates";
+import { sanitizeBook } from "./timetable-store";
 import type { Trip } from "./types";
 
 describe("lohe engine", () => {
@@ -169,5 +171,33 @@ describe("lohe engine", () => {
   it("rejects the empty lohe template as a daily report", async () => {
     const buf = readFileSync("/workspace/attachments/لوحه ساز نرم افزار سير و اعزام.xlsm");
     await assert.rejects(() => processWorkbook(buf, "template.xlsm"), /اعزام|شناخته نشد|لوحه خالی/);
+  });
+
+  it("uses custom output hours instead of the default pardazesh list", async () => {
+    const buf = readFileSync("/workspace/public/samples/gozaresh-avaliye.xls");
+    const book = cloneDefaultBook();
+    book.weekday = [
+      ["05:20", null],
+      ["09:15", null],
+    ];
+    const result = await processWorkbook(buf, "اولیه 3.xls", "weekday", book);
+    const golTimes = result.slots.filter((s) => s.origin === "golshahr").map((s) => s.time).sort();
+    assert.deepEqual(golTimes, ["05:20", "09:15"]);
+    assert.equal(result.slots.some((s) => s.time === "05:30"), false);
+    const g0520 = result.slots.find((s) => s.origin === "golshahr" && s.time === "05:20");
+    assert.ok(g0520 && g0520.vacantMaster === false);
+    assert.equal(result.timetableRows.length, 2);
+  });
+
+  it("sanitizes a saved timetable book", () => {
+    const book = sanitizeBook({
+      weekday: [["5:20", ""], ["bad", "06:00"]],
+      thursday: "nope",
+    });
+    assert.equal(book.weekday[0]?.[0], "05:20");
+    assert.equal(book.weekday[0]?.[1], null);
+    assert.equal(book.weekday[1]?.[1], "06:00");
+    assert.ok(book.thursday.length > 1);
+    assert.ok(book.friday.length > 1);
   });
 });

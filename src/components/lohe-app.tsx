@@ -271,7 +271,7 @@ export function LoheApp() {
               </label>
               <Button
                 variant={tab === "hours" ? "default" : "outline"}
-                onClick={() => setTab(tab === "hours" ? (result ? "roster" : "roster") : "hours")}
+                onClick={() => setTab(tab === "hours" ? "roster" : "hours")}
               >
                 <Clock3 />
                 ساعات خروجی

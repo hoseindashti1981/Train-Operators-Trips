@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   bookIsCustom,
+  cloneDefaultBook,
   countHours,
   dayKindLabel,
   DEFAULT_PAIRS,
@@ -56,17 +57,7 @@ export function HoursEditor({
         <div className="flex flex-wrap items-center gap-2">
           {custom ? <Badge variant="warn">ویرایش‌شده</Badge> : <Badge variant="ok">پیش‌فرض</Badge>}
           {bookIsCustom(book) ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                onChange({
-                  weekday: DEFAULT_PAIRS.weekday.map((p) => [...p] as TimePair),
-                  thursday: DEFAULT_PAIRS.thursday.map((p) => [...p] as TimePair),
-                  friday: DEFAULT_PAIRS.friday.map((p) => [...p] as TimePair),
-                })
-              }
-            >
+            <Button variant="outline" size="sm" onClick={() => onChange(cloneDefaultBook())}>
               <RotateCcw />
               بازگشت همه
             </Button>
@@ -112,10 +103,10 @@ export function HoursEditor({
               <tr key={`${kind}-${i}`} className="border-t border-border">
                 <td className="w-10 px-3 py-1.5 tabular-nums text-muted-foreground">{faNum(i + 1)}</td>
                 <td className="px-2 py-1.5">
-                  <HourInput value={row[0]} onCommit={(v) => patch(i, 0, v)} />
+                  <HourInput key={`${kind}-${i}-g-${row[0] ?? ""}`} value={row[0]} onCommit={(v) => patch(i, 0, v)} />
                 </td>
                 <td className="px-2 py-1.5">
-                  <HourInput value={row[1]} onCommit={(v) => patch(i, 1, v)} />
+                  <HourInput key={`${kind}-${i}-t-${row[1] ?? ""}`} value={row[1]} onCommit={(v) => patch(i, 1, v)} />
                 </td>
                 <td className="w-12 px-2 py-1.5">
                   <button

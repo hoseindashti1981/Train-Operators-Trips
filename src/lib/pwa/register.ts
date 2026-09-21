@@ -1,4 +1,4 @@
-const SW_URL = "/sw.js";
+import { publicUrl } from "@/lib/public-url";
 
 export function isStandalone(): boolean {
   if (typeof window === "undefined") return false;
@@ -14,7 +14,9 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
   if (!window.isSecureContext) return null;
 
   try {
-    const registration = await navigator.serviceWorker.register(SW_URL, { scope: "/" });
+    const registration = await navigator.serviceWorker.register(publicUrl("sw.js"), {
+      scope: import.meta.env.BASE_URL || "/",
+    });
     await registration.update().catch(() => undefined);
     void warmupOfflineCache();
     return registration;
@@ -25,14 +27,15 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
 
 async function warmupOfflineCache() {
   try {
+    const origin = self.location.origin;
     const sameOrigin = performance
       .getEntriesByType("resource")
       .map((entry) => (entry as PerformanceResourceTiming).name)
-      .filter((url) => url.startsWith(self.location.origin));
+      .filter((url) => url.startsWith(origin));
     await Promise.all([
-      fetch("/samples/gozaresh-avaliye.xls", { cache: "reload" }).catch(() => undefined),
-      fetch("/manifest.webmanifest").catch(() => undefined),
-      fetch("/icon-192.png").catch(() => undefined),
+      fetch(publicUrl("samples/gozaresh-avaliye.xls"), { cache: "reload" }).catch(() => undefined),
+      fetch(publicUrl("manifest.webmanifest")).catch(() => undefined),
+      fetch(publicUrl("icon-192.png")).catch(() => undefined),
       import("xlsx").catch(() => undefined),
       ...sameOrigin.slice(0, 40).map((url) => fetch(url).catch(() => undefined)),
     ]);

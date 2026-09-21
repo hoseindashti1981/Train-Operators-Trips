@@ -1,15 +1,20 @@
-/* لوحه‌ساز — runtime cache so the app keeps working after first load */
-const VERSION = "lohe-saz-offline-v1";
+/* لوحه‌ساز — cache relative to this worker's scope (works on GitHub Pages too) */
+const VERSION = "lohe-saz-offline-v2";
+
+function scoped(path) {
+  return new URL(path, self.registration.scope).href;
+}
+
 const PRECACHE = [
-  "/",
-  "/offline.html",
-  "/favicon.svg",
-  "/manifest.webmanifest",
-  "/icon-192.png",
-  "/icon-512.png",
-  "/icon-maskable-512.png",
-  "/samples/gozaresh-avaliye.xls",
-];
+  "./",
+  "./offline.html",
+  "./favicon.svg",
+  "./manifest.webmanifest",
+  "./icon-192.png",
+  "./icon-512.png",
+  "./icon-maskable-512.png",
+  "./samples/gozaresh-avaliye.xls",
+].map(scoped);
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -63,12 +68,12 @@ self.addEventListener("fetch", (event) => {
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request)
-        .then((response) => cachePut("/", response))
+        .then((response) => cachePut(scoped("./"), response))
         .catch(async () => {
           const cache = await caches.open(VERSION);
           return (
-            (await cache.match("/")) ||
-            (await cache.match("/offline.html")) ||
+            (await cache.match(scoped("./"))) ||
+            (await cache.match(scoped("./offline.html"))) ||
             new Response("آفلاین", { status: 503, headers: { "content-type": "text/plain; charset=utf-8" } })
           );
         }),

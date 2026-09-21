@@ -18,6 +18,7 @@ import { HoursEditor } from "@/components/hours-editor";
 import { PwaBar } from "@/components/pwa-bar";
 import { cn } from "@/lib/utils";
 import { registerServiceWorker } from "@/lib/pwa/register";
+import { publicUrl } from "@/lib/public-url";
 import {
   bookIsCustom,
   cloneDefaultBook,
@@ -126,7 +127,7 @@ export function LoheApp() {
   async function loadDemo() {
     setBusy(true);
     try {
-      const res = await fetch("/samples/gozaresh-avaliye.xls");
+      const res = await fetch(publicUrl("samples/gozaresh-avaliye.xls"));
       if (!res.ok) throw new Error("نمونه در دسترس نیست");
       const buf = await res.arrayBuffer();
       const processed = await processWorkbook(buf, "اولیه 3.xls", dayChoice, book);

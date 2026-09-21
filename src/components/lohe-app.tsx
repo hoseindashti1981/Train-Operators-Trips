@@ -15,7 +15,9 @@ import { toast, Toaster } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { HoursEditor } from "@/components/hours-editor";
+import { PwaBar } from "@/components/pwa-bar";
 import { cn } from "@/lib/utils";
+import { registerServiceWorker } from "@/lib/pwa/register";
 import {
   bookIsCustom,
   cloneDefaultBook,
@@ -66,6 +68,7 @@ function crewText(people: CrewMember[]): string {
 
 export function LoheApp() {
   const inputRef = useRef<HTMLInputElement>(null);
+  const runFileRef = useRef<(file: File) => Promise<void>>(async () => {});
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ProcessResult | null>(null);
@@ -78,6 +81,20 @@ export function LoheApp() {
 
   useEffect(() => {
     setBook(loadTimetableBook());
+  }, []);
+
+  useEffect(() => {
+    if (!import.meta.env.PROD) return;
+    void registerServiceWorker();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.launchQueue) return;
+    window.launchQueue.setConsumer((params) => {
+      const handle = params.files?.[0];
+      if (!handle) return;
+      void handle.getFile().then((file) => runFileRef.current(file));
+    });
   }, []);
 
   function applyBook(next: TimetableBook) {
@@ -104,6 +121,7 @@ export function LoheApp() {
       setBusy(false);
     }
   }
+  runFileRef.current = (file: File) => runFile(file);
 
   async function loadDemo() {
     setBusy(true);
@@ -207,6 +225,7 @@ export function LoheApp() {
               <Download />
               خروجی اکسل
             </Button>
+            <PwaBar />
           </div>
         </div>
       </header>

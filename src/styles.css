@@ -1,5 +1,7 @@
 @import "@fontsource-variable/vazirmatn";
 @import "tailwindcss";
+@source "./**/*.{ts,tsx}";
+@source "../gh-pages-src/**/*.html";
 
 @theme {
   --font-sans: "Vazirmatn Variable", "Vazirmatn", "Segoe UI", Tahoma, sans-serif;

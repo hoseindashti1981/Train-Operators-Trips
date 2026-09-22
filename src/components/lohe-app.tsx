@@ -235,8 +235,8 @@ export function LoheApp() {
         <input
           ref={inputRef}
           type="file"
+          hidden
           accept=".xls,.xlsx,.xlsm,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-          className="hidden"
           onChange={(e) => {
             onFiles(e.target.files);
             e.target.value = "";

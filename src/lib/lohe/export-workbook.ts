@@ -1,4 +1,5 @@
 import { roleLabel, stationLabel } from "./normalize";
+import { appendPrintSheet, buildPrintSheet } from "./print-sheet";
 import type { ProcessResult, SlotAssignment } from "./types";
 import { loadXlsx, type XLSXModule } from "./xlsx-load";
 
@@ -142,6 +143,7 @@ export async function buildExportWorkbook(result: ProcessResult) {
   XLSX.utils.book_append_sheet(wb, s2, "گزارش راهبران");
   XLSX.utils.book_append_sheet(wb, s3, "جزئیات اعزام");
   XLSX.utils.book_append_sheet(wb, s4, "هشدارها");
+  await appendPrintSheet(wb, buildPrintSheet(result));
   return wb;
 }
 

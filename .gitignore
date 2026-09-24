@@ -9,3 +9,7 @@ tmp/
 dist-pages/
 *.log
 .DS_Store
+
+/index.html
+/404.html
+/assets/

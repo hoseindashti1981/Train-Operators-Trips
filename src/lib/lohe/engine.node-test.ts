@@ -8,6 +8,7 @@ import { buildDriverReport } from "./driver-report";
 import { buildExportWorkbook } from "./export-workbook";
 import { cloneDefaultBook } from "./templates";
 import { sanitizeBook } from "./timetable-store";
+import { buildPrintAoA, buildPrintSheet, FIXED_EVENING_SHIFT, FIXED_MORNING_SHIFT } from "./print-sheet";
 import type { Trip } from "./types";
 
 describe("lohe engine", () => {
@@ -162,10 +163,7 @@ describe("lohe engine", () => {
     const again = processTrips(result.trips, result.meta, "weekday");
     assert.equal(again.stats.filledCrewPairs, again.slots.length);
     const wb = await buildExportWorkbook(again);
-    assert.deepEqual(
-      wb.SheetNames,
-      ["پردازش", "گزارش راهبران", "جزئیات اعزام", "هشدارها"],
-    );
+    assert.deepEqual(wb.SheetNames, ["پردازش", "گزارش راهبران", "جزئیات اعزام", "هشدارها", "لوحه چاپ"]);
   });
 
   it("rejects the empty lohe template as a daily report", async () => {
@@ -199,5 +197,41 @@ describe("lohe engine", () => {
     assert.equal(book.weekday[1]?.[1], "06:00");
     assert.ok(book.thursday.length > 1);
     assert.ok(book.friday.length > 1);
+  });
+
+  it("builds the print lohe from the same processed hours and date", async () => {
+    const buf = readFileSync("/workspace/public/samples/gozaresh-avaliye.xls");
+    const result = await processWorkbook(buf, "اولیه 3.xls", "auto");
+    const sheet = buildPrintSheet(result);
+    assert.equal(sheet.morningShift, FIXED_MORNING_SHIFT);
+    assert.equal(sheet.eveningShift, FIXED_EVENING_SHIFT);
+    assert.equal(sheet.weekday, "چهارشنبه");
+    assert.ok(sheet.date.includes("1402"));
+    assert.equal(sheet.rows[0]?.golTime, "05:20");
+    assert.equal(sheet.rows[0]?.tehTime, "05:30");
+    assert.match(sheet.rows[0]?.golH1 ?? "", /امیری|اميري/);
+    assert.match(sheet.rows[0]?.golR ?? "", /حسین|حسين/);
+    assert.match(sheet.rows[0]?.tehH1 ?? "", /آجورلو/);
+    const aoa = buildPrintAoA(sheet);
+    assert.equal(aoa[0]?.[0], "شیفت صبح");
+    assert.equal(aoa[0]?.[1], "A");
+    assert.equal(aoa[0]?.[5], "B");
+    assert.match(String(aoa[1]?.[4] ?? ""), /تاریخ/);
+    assert.equal(aoa[2]?.[6], "چهارشنبه");
+    assert.equal(aoa[2]?.[2], "T");
+    assert.equal(aoa[2]?.[3], "H1");
+    assert.equal(aoa[3]?.[0], "05:20");
+    assert.match(String(aoa[3]?.[3] ?? ""), /امیری|اميري/);
+    const book = cloneDefaultBook();
+    book.weekday = [
+      ["05:20", null],
+      ["09:15", null],
+    ];
+    const custom = await processWorkbook(buf, "اولیه 3.xls", "weekday", book);
+    const customSheet = buildPrintSheet(custom);
+    assert.deepEqual(
+      customSheet.rows.map((r) => r.golTime),
+      ["05:20", "09:15"],
+    );
   });
 });

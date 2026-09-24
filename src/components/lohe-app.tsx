@@ -6,6 +6,7 @@ import {
   Download,
   FileSpreadsheet,
   Loader2,
+  Printer,
   Search,
   TrainFront,
   Upload,
@@ -15,6 +16,7 @@ import { toast, Toaster } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { HoursEditor } from "@/components/hours-editor";
+import { LohePrintSurface, printLohe } from "@/components/lohe-print";
 import { PwaBar } from "@/components/pwa-bar";
 import { cn } from "@/lib/utils";
 import { registerServiceWorker } from "@/lib/pwa/register";
@@ -153,6 +155,11 @@ export function LoheApp() {
     }
   }
 
+  function printBoard() {
+    if (!result) return;
+    printLohe();
+  }
+
   function onFiles(files: FileList | null) {
     const file = files?.[0];
     if (!file) return;
@@ -199,6 +206,7 @@ export function LoheApp() {
           className: "font-sans !bg-elevated !text-fg !border-border",
         }}
       />
+      {result ? <LohePrintSurface result={result} /> : null}
       <header className="border-b border-border bg-surface">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="flex items-start gap-3">
@@ -225,6 +233,10 @@ export function LoheApp() {
             <Button onClick={() => void exportExcel()} disabled={!result}>
               <Download />
               خروجی اکسل
+            </Button>
+            <Button variant="outline" onClick={() => void printBoard()} disabled={!result}>
+              <Printer />
+              چاپ لوحه
             </Button>
             <PwaBar />
           </div>

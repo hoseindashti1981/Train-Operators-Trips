@@ -85,3 +85,74 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+.lohe-print-sheet {
+  display: none;
+}
+
+.lohe-print-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 10px;
+}
+
+.lohe-print-table th,
+.lohe-print-table td {
+  border: 1px solid #333;
+  padding: 1px 3px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.lohe-print-table th {
+  font-weight: 700;
+  background: #ececec;
+}
+
+.lohe-print-gap td {
+  height: 8px;
+  background: transparent;
+}
+
+.lohe-print-vert {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 9px;
+  letter-spacing: 0.03em;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 6mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    color: #111 !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .lohe-print-sheet,
+  .lohe-print-sheet * {
+    visibility: visible;
+  }
+
+  .lohe-print-sheet {
+    display: block;
+    position: absolute;
+    inset: 0;
+    background: #fff;
+    color: #111;
+  }
+
+  .lohe-print-table th,
+  .lohe-print-table td {
+    color: #111;
+  }
+}

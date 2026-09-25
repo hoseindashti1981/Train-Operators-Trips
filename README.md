@@ -6,9 +6,13 @@
 
 ## اجرای آنلاین
 
-[https://hoseindashti1981.github.io/Train-Operators-Trips/](https://hoseindashti1981.github.io/Train-Operators-Trips/)
+نسخهٔ قابل‌نصب (PWA):
 
-این آدرس نسخهٔ استاتیک است (GitHub Pages). بعد از هر push به `main` خودش به‌روز می‌شود.
+[https://hoseindashti1981.github.io/Train-Operators-Trips/docs/](https://hoseindashti1981.github.io/Train-Operators-Trips/docs/)
+
+آدرس ریشه فعلاً به همین مسیر هدایت می‌شود. در کروم دسکتاپ/اندروید: منوی مرورگر → **Install app**. در آیفون: Share → Add to Home Screen.
+
+بار اول آنلاین باز کنید تا سرویس‌ورکر، فونت و کتابخانه اکسل ذخیره شود؛ بعدش فایل محلی را بدون اینترنت هم پردازش می‌کند.
 
 ## اجرا روی سیستم خودتان
 
@@ -38,9 +42,14 @@ TypeScript، React، TanStack Start، SheetJS (`xlsx`).
 
 ## نصب به‌صورت PWA (تقریباً آفلاین)
 
-بعد از باز شدن نسخهٔ آنلاین یا `npm run build`، مرورگر دکمه **نصب روی دستگاه** را نشان می‌دهد (در آیفون: Share → Add to Home Screen).
+پیش‌نمایش داخل گراک داخل iframe است و مرورگر اجازهٔ نصب نمی‌دهد. از لینک GitHub Pages بالا در تب جدا استفاده کنید.
 
-بار اول باید آنلاین باز شود تا برنامه، فونت و کتابخانه اکسل ذخیره شوند. از آن به بعد:
+بعد از باز شدن آن آدرس:
+
+- کروم: دکمه **نصب روی دستگاه** یا منوی ⋮ → Install app
+- آیفون: Share → Add to Home Screen
+
+بار اول باید آنلاین باشد. از آن به بعد:
 
 - باز کردن اپ بدون اینترنت
 - بارگذاری فایل `.xls` از خود دستگاه

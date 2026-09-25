@@ -7,7 +7,7 @@ const root = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig({
   root: fileURLToPath(new URL("./gh-pages-src", import.meta.url)),
-  base: "/Train-Operators-Trips/",
+  base: "/Train-Operators-Trips/docs/",
   publicDir: fileURLToPath(new URL("./public", import.meta.url)),
   plugins: [tailwindcss(), viteReact()],
   resolve: {

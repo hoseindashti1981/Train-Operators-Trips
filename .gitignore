@@ -10,6 +10,8 @@ dist-pages/
 *.log
 .DS_Store
 
+# GitHub Pages lives in docs/; do not commit a root SPA index.html
+# (Vite/Nitro would treat it as the app template).
 /index.html
 /404.html
 /assets/

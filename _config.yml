@@ -1,0 +1,11 @@
+# GitHub Pages currently deploys branch `main` from `/`.
+# The installable PWA lives in /docs so it is not eaten by the Jekyll theme.
+theme: null
+plugins:
+  - jekyll-redirect-from
+exclude:
+  - node_modules
+  - src
+  - scripts
+  - server
+  - migrations

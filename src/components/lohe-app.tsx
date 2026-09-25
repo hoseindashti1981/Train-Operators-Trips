@@ -19,7 +19,7 @@ import { HoursEditor } from "@/components/hours-editor";
 import { LohePrintSurface, printLohe } from "@/components/lohe-print";
 import { PwaBar } from "@/components/pwa-bar";
 import { cn } from "@/lib/utils";
-import { registerServiceWorker } from "@/lib/pwa/register";
+import { GITHUB_PWA_URL } from "@/lib/pwa/register";
 import { publicUrl } from "@/lib/public-url";
 import {
   bookIsCustom,
@@ -84,11 +84,6 @@ export function LoheApp() {
 
   useEffect(() => {
     setBook(loadTimetableBook());
-  }, []);
-
-  useEffect(() => {
-    if (!import.meta.env.PROD) return;
-    void registerServiceWorker();
   }, []);
 
   useEffect(() => {
@@ -415,6 +410,12 @@ function EmptyGuide({ onDemo, onHours }: { onDemo: () => void; onHours: () => vo
           ویرایش ساعت‌های خروجی
         </Button>
       </div>
+      <p className="pt-2 text-center text-xs leading-relaxed text-muted-foreground">
+        برای نصب آفلاین روی گوشی، نسخهٔ گیت‌هاب را در کروم باز کنید:{" "}
+        <a className="underline decoration-border underline-offset-4 hover:text-fg" href={GITHUB_PWA_URL} target="_blank" rel="noreferrer">
+          لوحه‌ساز روی GitHub Pages
+        </a>
+      </p>
     </div>
   );
 }

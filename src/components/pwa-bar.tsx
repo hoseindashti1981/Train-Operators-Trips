@@ -1,9 +1,12 @@
-import { Download, WifiOff } from "lucide-react";
+import { Download, Smartphone, WifiOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
+  GITHUB_PWA_URL,
+  isIframe,
   isStandalone,
+  registerServiceWorker,
   type BeforeInstallPromptEvent,
 } from "@/lib/pwa/register";
 
@@ -13,11 +16,15 @@ export function PwaBar() {
   const [standalone, setStandalone] = useState(false);
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [iosHint, setIosHint] = useState(false);
+  const [framed, setFramed] = useState(false);
+  const [swReady, setSwReady] = useState(false);
+  const [hint, setHint] = useState(false);
 
   useEffect(() => {
     setReady(true);
     setOnline(navigator.onLine);
     setStandalone(isStandalone());
+    setFramed(isIframe());
     const ua = navigator.userAgent;
     const ios = /iPhone|iPad|iPod/i.test(ua);
     setIosHint(ios && !isStandalone());
@@ -40,6 +47,13 @@ export function PwaBar() {
     };
     window.addEventListener("appinstalled", onInstalled);
 
+    void registerServiceWorker().then((reg) => {
+      setSwReady(Boolean(reg));
+    });
+    if ("serviceWorker" in navigator) {
+      void navigator.serviceWorker.ready.then(() => setSwReady(true)).catch(() => undefined);
+    }
+
     return () => {
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
@@ -49,14 +63,21 @@ export function PwaBar() {
   }, []);
 
   async function install() {
-    if (!installEvent) return;
-    await installEvent.prompt();
-    const choice = await installEvent.userChoice;
-    if (choice.outcome === "accepted") setInstallEvent(null);
+    if (installEvent) {
+      await installEvent.prompt();
+      const choice = await installEvent.userChoice;
+      if (choice.outcome === "accepted") setInstallEvent(null);
+      return;
+    }
+    if (framed) {
+      window.open(GITHUB_PWA_URL, "_blank", "noopener,noreferrer");
+      return;
+    }
+    setHint(true);
   }
 
   if (!ready) return null;
-  if (online && standalone && !installEvent) return null;
+  if (standalone && online) return null;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -70,15 +91,21 @@ export function PwaBar() {
           آفلاین — پردازش فایل محلی ادامه دارد
         </span>
       ) : null}
-      {installEvent ? (
+      {!standalone ? (
         <Button variant="outline" onClick={() => void install()}>
-          <Download />
-          نصب روی دستگاه
+          {framed ? <Smartphone /> : <Download />}
+          {framed ? "نصب از گیت‌هاب" : "نصب روی دستگاه"}
         </Button>
       ) : null}
-      {iosHint && !installEvent ? (
+      {iosHint ? (
         <p className="max-w-xs text-xs leading-relaxed text-muted-foreground">
-          در سافاری: Share سپس Add to Home Screen تا آفلاین نصب شود.
+          در سافاری: Share سپس Add to Home Screen.
+        </p>
+      ) : null}
+      {hint && !installEvent ? (
+        <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">
+          از منوی مرورگر «Install app / افزودن به صفحه اصلی» را بزنید.
+          {swReady ? " سرویس آفلاین آماده است." : ""}
         </p>
       ) : null}
     </div>

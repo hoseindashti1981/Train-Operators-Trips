@@ -23,8 +23,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build:pages
+      # Current repo Pages source is `main /`. The PWA is the `docs/` folder.
+      # Keep gh-pages updated too in case the source is switched later.
       - uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist-pages
-          force_orphan: true
+          destination_dir: docs
+          keep_files: true
+          force_orphan: false

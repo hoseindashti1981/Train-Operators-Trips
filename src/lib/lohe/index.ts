@@ -5,6 +5,8 @@ export * from "./templates";
 export * from "./timetable-store";
 export * from "./process";
 export * from "./export-workbook";
+export * from "./personnel";
+export * from "./kasri";
 export * from "./print-sheet";
 export * from "./driver-report";
 export * from "./match";

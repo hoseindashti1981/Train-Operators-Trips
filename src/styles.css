@@ -122,6 +122,13 @@
   letter-spacing: 0.03em;
 }
 
+.lohe-ot {
+  font-weight: 700;
+  font-style: italic;
+  background: #d0d0d0;
+  padding: 0 2px;
+}
+
 @media print {
   @page {
     size: A4 portrait;

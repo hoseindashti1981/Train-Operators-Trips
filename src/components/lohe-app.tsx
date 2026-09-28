@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
-  CheckCircle2,
   Clock3,
   Download,
   FileSpreadsheet,
@@ -24,27 +23,39 @@ import { publicUrl } from "@/lib/public-url";
 import {
   bookIsCustom,
   cloneDefaultBook,
+  computeKasri,
   dayKindLabel,
+  DEFAULT_DUTY,
   downloadWorkbook,
   faNum,
+  isOvertimeMember,
+  loadDuty,
+  loadPersonnelBook,
   loadTimetableBook,
+  parsePersonnelWorkbook,
   processTrips,
   processWorkbook,
   roleLabel,
+  saveDuty,
+  savePersonnelBook,
   saveTimetableBook,
   stationLabel,
   stationShort,
   type CrewMember,
   type DayKind,
   type DriverRow,
+  type KasriResult,
+  type PersonnelBook,
   type ProcessResult,
+  type ShiftDuty,
+  type ShiftLetter,
   type SlotAssignment,
   type StationKind,
   type TimetableBook,
   type TimetableRow,
 } from "@/lib/lohe";
 
-type TabId = "roster" | "drivers" | "detail" | "warnings" | "hours";
+type TabId = "roster" | "drivers" | "detail" | "warnings" | "hours" | "kasri";
 type DayChoice = "auto" | DayKind;
 
 const TABS: { id: TabId; label: string }[] = [
@@ -52,6 +63,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "drivers", label: "گزارش راهبران" },
   { id: "detail", label: "جزئیات اعزام" },
   { id: "warnings", label: "هشدارها" },
+  { id: "kasri", label: "کسری شیفت" },
   { id: "hours", label: "ساعات خروجی" },
 ];
 
@@ -71,6 +83,7 @@ function crewText(people: CrewMember[]): string {
 
 export function LoheApp() {
   const inputRef = useRef<HTMLInputElement>(null);
+  const personnelInputRef = useRef<HTMLInputElement>(null);
   const runFileRef = useRef<(file: File) => Promise<void>>(async () => {});
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -81,9 +94,15 @@ export function LoheApp() {
   const [showTrainee, setShowTrainee] = useState(false);
   const [fileLabel, setFileLabel] = useState<string | null>(null);
   const [book, setBook] = useState<TimetableBook>(() => cloneDefaultBook());
+  const [personnel, setPersonnel] = useState<PersonnelBook | null>(null);
+  const [duty, setDuty] = useState<ShiftDuty>(() => ({ ...DEFAULT_DUTY }));
 
   useEffect(() => {
     setBook(loadTimetableBook());
+    setDuty(loadDuty());
+    const saved = loadPersonnelBook();
+    if (saved) setPersonnel(saved);
+    else void loadSamplePersonnel();
   }, []);
 
   useEffect(() => {
@@ -95,11 +114,50 @@ export function LoheApp() {
     });
   }, []);
 
+  async function loadSamplePersonnel() {
+    try {
+      const res = await fetch(publicUrl("samples/list-table.xlsm"));
+      if (!res.ok) return;
+      const buf = await res.arrayBuffer();
+      const parsed = await parsePersonnelWorkbook(buf, "LIST TABLE.xlsm");
+      setPersonnel(parsed);
+      savePersonnelBook(parsed);
+    } catch {
+      /* optional default roster */
+    }
+  }
+
+  const kasri = useMemo(() => {
+    if (!result || !personnel) return null;
+    return computeKasri(result, personnel.people, duty);
+  }, [result, personnel, duty]);
+
+  function applyDuty(next: ShiftDuty) {
+    setDuty(next);
+    saveDuty(next);
+  }
+
   function applyBook(next: TimetableBook) {
     setBook(next);
     saveTimetableBook(next);
     if (result) {
       setResult(processTrips(result.trips, result.meta, dayChoice, next));
+    }
+  }
+
+  async function runPersonnelFile(file: File) {
+    setBusy(true);
+    try {
+      const buf = await file.arrayBuffer();
+      const parsed = await parsePersonnelWorkbook(buf, file.name);
+      setPersonnel(parsed);
+      savePersonnelBook(parsed);
+      toast.success(`${faNum(parsed.people.length)} نفر از ${file.name} در لیست پرسنل نشست`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "خواندن لیست پرسنل ناموفق بود";
+      toast.error(message);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -143,7 +201,7 @@ export function LoheApp() {
   async function exportExcel() {
     if (!result) return;
     try {
-      await downloadWorkbook(result);
+      await downloadWorkbook(result, kasri);
     } catch (err) {
       const message = err instanceof Error ? err.message : "خروجی اکسل ساخته نشد";
       toast.error(message);
@@ -201,7 +259,7 @@ export function LoheApp() {
           className: "font-sans !bg-elevated !text-fg !border-border",
         }}
       />
-      {result ? <LohePrintSurface result={result} /> : null}
+      {result ? <LohePrintSurface result={result} duty={duty} kasri={kasri} /> : null}
       <header className="border-b border-border bg-surface">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="flex items-start gap-3">
@@ -233,6 +291,10 @@ export function LoheApp() {
               <Printer />
               چاپ لوحه
             </Button>
+            <Button variant="outline" onClick={() => personnelInputRef.current?.click()} disabled={busy}>
+              <Users />
+              لیست پرسنل
+            </Button>
             <PwaBar />
           </div>
         </div>
@@ -247,6 +309,17 @@ export function LoheApp() {
           onChange={(e) => {
             onFiles(e.target.files);
             e.target.value = "";
+          }}
+        />
+        <input
+          ref={personnelInputRef}
+          type="file"
+          hidden
+          accept=".xls,.xlsx,.xlsm,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) void runPersonnelFile(file);
           }}
         />
 
@@ -271,6 +344,7 @@ export function LoheApp() {
               <p className="text-sm font-medium">فایل گزارش اولیه (xls / xlsx)</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 {fileLabel ?? "فایل را بکشید اینجا یا از نمونه آماده استفاده کنید."}
+                {personnel ? ` · پرسنل: ${faNum(personnel.people.length)} نفر (${personnel.fileName})` : ""}
               </p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -285,6 +359,30 @@ export function LoheApp() {
                   <option value="weekday">روز عادی</option>
                   <option value="thursday">پنجشنبه</option>
                   <option value="friday">جمعه</option>
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                صبحکار
+                <select
+                  value={duty.morning}
+                  onChange={(e) => applyDuty({ ...duty, morning: e.target.value as ShiftLetter })}
+                  className="h-11 min-w-20 rounded-[var(--radius-sm)] border border-border bg-elevated px-3 text-sm text-fg"
+                >
+                  <option value="A">A</option>
+                  <option value="B">B</option>
+                  <option value="C">C</option>
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                عصرکار
+                <select
+                  value={duty.evening}
+                  onChange={(e) => applyDuty({ ...duty, evening: e.target.value as ShiftLetter })}
+                  className="h-11 min-w-20 rounded-[var(--radius-sm)] border border-border bg-elevated px-3 text-sm text-fg"
+                >
+                  <option value="A">A</option>
+                  <option value="B">B</option>
+                  <option value="C">C</option>
                 </select>
               </label>
               <label className="flex h-11 items-center gap-2 rounded-[var(--radius-sm)] border border-border bg-elevated px-3 text-sm">
@@ -325,7 +423,7 @@ export function LoheApp() {
 
         {result && tab !== "hours" && (
           <>
-            <StatsRow result={result} />
+            <StatsRow result={result} kasri={kasri} />
 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-wrap gap-1 rounded-[var(--radius-md)] border border-border bg-surface p-1">
@@ -341,6 +439,11 @@ export function LoheApp() {
                   >
                     {item.id === "hours" ? <Clock3 className="me-1 inline size-3.5" /> : null}
                     {item.label}
+                    {item.id === "kasri" && kasri ? (
+                      <span className="ms-1 text-xs opacity-80">
+                        {faNum(kasri.morningMissing.length + kasri.eveningMissing.length)}
+                      </span>
+                    ) : null}
                     {item.id === "warnings" && result.warnings.length > 0 ? (
                       <span className="ms-2 tabular-nums">({faNum(result.warnings.length)})</span>
                     ) : null}
@@ -364,10 +467,17 @@ export function LoheApp() {
             </div>
 
             <div className="mt-4">
-              {tab === "roster" && <RosterBoard result={result} showTrainee={showTrainee} />}
+              {tab === "roster" && <RosterBoard result={result} showTrainee={showTrainee} kasri={kasri} />}
               {tab === "drivers" && <DriverTable rows={filteredDrivers} />}
               {tab === "detail" && <DetailTable trips={filteredTrips} />}
               {tab === "warnings" && <WarningsPanel result={result} />}
+              {tab === "kasri" && (
+                <KasriPanel
+                  kasri={kasri}
+                  personnel={personnel}
+                  onUpload={() => personnelInputRef.current?.click()}
+                />
+              )}
             </div>
           </>
         )}
@@ -390,8 +500,8 @@ function EmptyGuide({ onDemo, onHours }: { onDemo: () => void; onHours: () => vo
             body: "فقط ساعت‌هایی که در لوحه خروجی نوشته‌اید پر می‌شوند. از بخش ساعات خروجی می‌توانید لیست را عوض کنید.",
           },
           {
-            title: "۳. گزارش نفرات",
-            body: "شیت جدا با مرتب‌سازی فامیلی: نام، نام خانوادگی، شماره پرسنلی و ساعت حرکت‌ها یکی‌یکی.",
+            title: "۳. کسری و اضافه‌کار",
+            body: "لیست پرسنل خط ۵ را یک‌بار بارگذاری کنید. صبحکار و عصرکار را انتخاب کنید؛ کسری و اضافه‌کار از همان لوحه محاسبه می‌شود.",
           },
         ].map((card) => (
           <article key={card.title} className="rounded-[var(--radius-xl)] border border-border bg-surface p-5">
@@ -420,21 +530,24 @@ function EmptyGuide({ onDemo, onHours }: { onDemo: () => void; onHours: () => vo
   );
 }
 
-function StatsRow({ result }: { result: ProcessResult }) {
+function StatsRow({ result, kasri }: { result: ProcessResult; kasri: KasriResult | null }) {
+  const kasriCount = kasri ? kasri.morningMissing.length + kasri.eveningMissing.length : 0;
   const items = [
-    { label: "اعزام نام‌دار", value: faNum(result.stats.namedTripCount), icon: TrainFront, tone: "default" as const },
-    { label: "راهبران یکتا", value: faNum(result.stats.driverCount), icon: Users, tone: "default" as const },
+    { label: "اعزام نام‌دار", value: faNum(result.stats.namedTripCount), icon: TrainFront, tone: "default" as const, hint: result.meta.processDate || "بدون تاریخ" },
+    { label: "راهبران یکتا", value: faNum(result.stats.driverCount), icon: Users, tone: "default" as const, hint: result.weekdayName },
     {
-      label: "جفت کامل",
-      value: faNum(result.stats.filledCrewPairs),
-      icon: CheckCircle2,
-      tone: "ok" as const,
+      label: "کسری شیفت",
+      value: kasri ? faNum(kasriCount) : "—",
+      icon: AlertTriangle,
+      tone: kasriCount > 0 ? ("warn" as const) : ("ok" as const),
+      hint: kasri ? `صبح ${kasri.duty.morning} · عصر ${kasri.duty.evening}` : "لیست پرسنل لازم است",
     },
     {
-      label: "کسری ساعت",
-      value: faNum(result.stats.vacantSlots),
-      icon: AlertTriangle,
-      tone: result.stats.vacantSlots > 0 ? ("warn" as const) : ("ok" as const),
+      label: "اضافه‌کار",
+      value: kasri ? faNum(kasri.overtime.length) : "—",
+      icon: Users,
+      tone: kasri && kasri.overtime.length > 0 ? ("warn" as const) : ("ok" as const),
+      hint: kasri && kasri.overtime.length > 0 ? "در چاپ بولد و خاکستری" : dayKindLabel(result.dayKind),
     },
   ];
   return (
@@ -454,20 +567,22 @@ function StatsRow({ result }: { result: ProcessResult }) {
           >
             {item.value}
           </p>
-          {item.label === "کسری ساعت" ? (
-            <p className="mt-2 text-xs text-muted-foreground">
-              {dayKindLabel(result.dayKind)} · {result.weekdayName}
-            </p>
-          ) : (
-            <p className="mt-2 text-xs text-muted-foreground">{result.meta.processDate || "بدون تاریخ"}</p>
-          )}
+          <p className="mt-2 text-xs text-muted-foreground">{item.hint}</p>
         </div>
       ))}
     </div>
   );
 }
 
-function RosterBoard({ result, showTrainee }: { result: ProcessResult; showTrainee: boolean }) {
+function RosterBoard({
+  result,
+  showTrainee,
+  kasri,
+}: {
+  result: ProcessResult;
+  showTrainee: boolean;
+  kasri: KasriResult | null;
+}) {
   const rows = result.timetableRows;
   const sections: { key: TimetableRow["section"]; title: string }[] = [
     { key: "morning", title: "صبح" },
@@ -504,6 +619,7 @@ function RosterBoard({ result, showTrainee }: { result: ProcessResult; showTrain
                 result={result}
                 showTrainee={showTrainee}
                 span={span}
+                kasri={kasri}
               />
             );
           })}
@@ -531,12 +647,14 @@ function RosterSection({
   result,
   showTrainee,
   span,
+  kasri,
 }: {
   title: string;
   rows: TimetableRow[];
   result: ProcessResult;
   showTrainee: boolean;
   span: number;
+  kasri: KasriResult | null;
 }) {
   return (
     <>
@@ -555,8 +673,8 @@ function RosterSection({
         }
         return (
           <tr key={`${title}-${row.golTime}-${row.tehTime}-${idx}`} className="border-t border-border">
-            <SlotCells origin="golshahr" time={row.golTime} result={result} showTrainee={showTrainee} />
-            <SlotCells origin="tehran" time={row.tehTime} result={result} showTrainee={showTrainee} edge />
+            <SlotCells origin="golshahr" time={row.golTime} result={result} showTrainee={showTrainee} kasri={kasri} />
+            <SlotCells origin="tehran" time={row.tehTime} result={result} showTrainee={showTrainee} kasri={kasri} edge />
           </tr>
         );
       })}
@@ -570,12 +688,14 @@ function SlotCells({
   result,
   showTrainee,
   edge,
+  kasri,
 }: {
   origin: StationKind;
   time: string | null;
   result: ProcessResult;
   showTrainee: boolean;
   edge?: boolean;
+  kasri: KasriResult | null;
 }) {
   const slot = slotAt(result.slots, origin, time);
   const edgeClass = edge ? "border-r border-border" : "";
@@ -593,10 +713,10 @@ function SlotCells({
     <>
       <td className={cn("px-3 py-2 font-medium tabular-nums text-line", edgeClass)}>{time}</td>
       <td className="px-3 py-2">
-        <CrewCell people={slot?.masters ?? []} vacant={slot?.vacantMaster} />
+        <CrewCell people={slot?.masters ?? []} vacant={slot?.vacantMaster} kasri={kasri} />
       </td>
       <td className="px-3 py-2">
-        <CrewCell people={slot?.slaves ?? []} vacant={slot?.vacantSlave} />
+        <CrewCell people={slot?.slaves ?? []} vacant={slot?.vacantSlave} kasri={kasri} />
       </td>
       {showTrainee ? (
         <td className="px-3 py-2 text-muted-foreground">{crewText(slot?.trainees ?? [])}</td>
@@ -605,14 +725,31 @@ function SlotCells({
   );
 }
 
-function CrewCell({ people, vacant }: { people: CrewMember[]; vacant?: boolean }) {
+function CrewCell({
+  people,
+  vacant,
+  kasri,
+}: {
+  people: CrewMember[];
+  vacant?: boolean;
+  kasri: KasriResult | null;
+}) {
   if (vacant) {
     return <span className="text-warn">کسری</span>;
   }
   if (people.length === 0) return <span className="text-muted-foreground">—</span>;
   return (
     <div className="flex flex-col">
-      <span>{crewText(people)}</span>
+      <span>
+        {people.map((p, i) => (
+          <span key={`${p.personnelId}-${p.displayName}-${i}`}>
+            {i > 0 ? " / " : null}
+            <span className={isOvertimeMember(p, kasri) ? "rounded-sm bg-muted px-1 font-bold italic" : undefined}>
+              {p.displayName}
+            </span>
+          </span>
+        ))}
+      </span>
       {people[0]?.personnelId ? (
         <span className="text-xs tabular-nums text-muted-foreground">{people[0].personnelId}</span>
       ) : null}
@@ -732,5 +869,78 @@ function WarningsPanel({ result }: { result: ProcessResult }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+function KasriPanel({
+  kasri,
+  personnel,
+  onUpload,
+}: {
+  kasri: KasriResult | null;
+  personnel: PersonnelBook | null;
+  onUpload: () => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 rounded-[var(--radius-xl)] border border-border bg-surface p-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-muted-foreground">
+          {personnel
+            ? `${faNum(personnel.people.length)} نفر از «${personnel.fileName}». راهبر قطار که شیفتش صبحکار یا عصرکار است ولی در لوحه نیست = کسری. راهبری که استراحت بوده و در لوحه آمده = اضافه‌کار.`
+            : "لیست پرسنل (LIST TABLE) را بارگذاری کنید تا کسری شیفت پر شود."}
+        </p>
+        <Button variant="outline" onClick={onUpload}>
+          <Users />
+          بارگذاری / جایگزینی لیست
+        </Button>
+      </div>
+      {!kasri ? (
+        <p className="rounded-[var(--radius-lg)] border border-border bg-surface p-6 text-sm text-muted-foreground">
+          بعد از پردازش گزارش روزانه، کسری صبح و عصر اینجا می‌آید.
+        </p>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-3">
+          <KasriList title={`کسری صبح (${kasri.duty.morning})`} people={kasri.morningMissing} empty="کسری صبح نیست." />
+          <KasriList title={`کسری عصر (${kasri.duty.evening})`} people={kasri.eveningMissing} empty="کسری عصر نیست." />
+          <KasriList title="اضافه‌کار" people={kasri.overtime} empty="اضافه‌کاری نیست." overtime />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function KasriList({
+  title,
+  people,
+  empty,
+  overtime,
+}: {
+  title: string;
+  people: PersonnelBook["people"];
+  empty: string;
+  overtime?: boolean;
+}) {
+  return (
+    <div className="rounded-[var(--radius-xl)] border border-border bg-surface">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <h3 className="text-sm font-medium">{title}</h3>
+        <span className="text-xs tabular-nums text-muted-foreground">{faNum(people.length)}</span>
+      </div>
+      {people.length === 0 ? (
+        <p className="px-4 py-5 text-sm text-muted-foreground">{empty}</p>
+      ) : (
+        <ul className="max-h-[28rem] overflow-auto text-sm">
+          {people.map((p) => (
+            <li key={p.personnelId || p.displayName} className="flex items-center justify-between gap-2 border-t border-border px-4 py-2">
+              <span className={overtime ? "font-bold italic" : undefined}>{p.displayName}</span>
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {p.personnelId}
+                {p.letter ? ` · ${p.letter}` : ""}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

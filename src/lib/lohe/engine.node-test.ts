@@ -234,4 +234,55 @@ describe("lohe engine", () => {
       ["05:20", "09:15"],
     );
   });
+
+  it("parses the line-5 personnel list and fills shortage/overtime", async () => {
+    const { parsePersonnelWorkbook, DEFAULT_DUTY } = await import("./personnel");
+    const { computeKasri, isOvertimeMember } = await import("./kasri");
+    const list = readFileSync("/workspace/public/samples/list-table.xlsm");
+    const book = await parsePersonnelWorkbook(list, "LIST TABLE.xlsm");
+    assert.equal(book.people.length, 189);
+    const letters = book.people.reduce(
+      (acc, p) => {
+        if (p.letter) acc[p.letter] += 1;
+        return acc;
+      },
+      { A: 0, B: 0, C: 0 },
+    );
+    assert.ok(letters.A > 50 && letters.B > 50 && letters.C > 50);
+    const lineDrivers = book.people.filter((p) => p.lineDriver);
+    assert.ok(lineDrivers.length >= 100);
+    assert.equal(book.people.filter((p) => p.detached).length, 2);
+
+    const buf = readFileSync("/workspace/public/samples/gozaresh-avaliye.xls");
+    const result = await processWorkbook(buf, "اولیه 3.xls", "auto");
+    const kasri = computeKasri(result, book.people, DEFAULT_DUTY);
+    assert.equal(kasri.duty.morning, "A");
+    assert.equal(kasri.duty.evening, "B");
+    assert.ok(kasri.morningMissing.length > 0);
+    assert.ok(kasri.eveningMissing.length > 0);
+    assert.ok(kasri.morningMissing.every((p) => p.letter === "A" && p.lineDriver));
+    assert.ok(kasri.eveningMissing.every((p) => p.letter === "B" && p.lineDriver));
+    const amiri = result.slots.find((s) => s.origin === "golshahr" && s.time === "05:20")?.masters[0];
+    assert.ok(amiri);
+    assert.equal(isOvertimeMember(amiri, kasri), false);
+    const ot = kasri.overtime[0];
+    if (ot) {
+      const onLohe = result.slots.some((s) =>
+        [...s.masters, ...s.slaves].some((m) => m.personnelId === ot.personnelId || m.displayName === ot.displayName),
+      );
+      assert.equal(onLohe, true);
+      assert.equal(ot.letter, "C");
+    }
+    const sheet = buildPrintSheet(result, { kasri });
+    assert.ok(sheet.morningShortage.length === kasri.morningMissing.length);
+    const aoa = buildPrintAoA(sheet);
+    const footer = aoa.find((row) => String(row[2] ?? "").includes("عصرکار"));
+    assert.ok(footer);
+    assert.match(String(footer?.[4] ?? ""), /صبحکار/);
+    assert.ok(aoa.some((row) => row.includes(kasri.morningMissing[0]!.displayName)));
+    assert.ok(aoa.some((row) => row.includes(kasri.eveningMissing[0]!.displayName)));
+    const wb = await buildExportWorkbook(result, kasri);
+    assert.ok(wb.SheetNames.includes("کسری"));
+    assert.ok(wb.SheetNames.includes("لوحه چاپ"));
+  });
 });

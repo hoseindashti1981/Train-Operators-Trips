@@ -1,9 +1,11 @@
+import type { KasriResult } from "./kasri";
+import type { ShiftDuty } from "./personnel";
+import { DEFAULT_DUTY } from "./personnel";
 import type { CrewMember, ProcessResult, SlotAssignment } from "./types";
 import { loadXlsx, type XLSXModule } from "./xlsx-load";
 
-/** تا وقتی تقویم شیفت تاریخ ساخته شود، صبح = A و عصر = B */
-export const FIXED_MORNING_SHIFT = "A";
-export const FIXED_EVENING_SHIFT = "B";
+export const FIXED_MORNING_SHIFT = DEFAULT_DUTY.morning;
+export const FIXED_EVENING_SHIFT = DEFAULT_DUTY.evening;
 
 export interface PrintRow {
   golTime: string;
@@ -21,6 +23,9 @@ export interface PrintSheet {
   date: string;
   weekday: string;
   rows: PrintRow[];
+  morningShortage: string[];
+  eveningShortage: string[];
+  overtimeNames: string[];
 }
 
 function slotAt(slots: SlotAssignment[], origin: SlotAssignment["origin"], time: string): SlotAssignment | null {
@@ -32,10 +37,15 @@ function names(people: CrewMember[]): string {
   return people.map((p) => p.displayName).filter(Boolean).join(" / ");
 }
 
-export function buildPrintSheet(result: ProcessResult): PrintSheet {
+export function buildPrintSheet(
+  result: ProcessResult,
+  opts?: { duty?: ShiftDuty; kasri?: KasriResult | null },
+): PrintSheet {
+  const duty = opts?.duty ?? opts?.kasri?.duty ?? DEFAULT_DUTY;
+  const kasri = opts?.kasri;
   return {
-    morningShift: FIXED_MORNING_SHIFT,
-    eveningShift: FIXED_EVENING_SHIFT,
+    morningShift: duty.morning,
+    eveningShift: duty.evening,
     date: result.meta.processDate || result.meta.reportDate || "",
     weekday: result.weekdayName,
     rows: result.timetableRows.map((row) => {
@@ -51,6 +61,9 @@ export function buildPrintSheet(result: ProcessResult): PrintSheet {
         tehH1: names(teh?.masters ?? []),
       };
     }),
+    morningShortage: kasri?.morningMissing.map((p) => p.displayName) ?? [],
+    eveningShortage: kasri?.eveningMissing.map((p) => p.displayName) ?? [],
+    overtimeNames: kasri?.overtime.map((p) => p.displayName) ?? [],
   };
 }
 
@@ -68,6 +81,7 @@ export function buildPrintAoA(sheet: PrintSheet): (string | number)[][] {
   for (const row of sheet.rows) {
     aoa.push([row.golTime, row.golR, row.golT, row.golH1, row.tehTime, row.tehR, "", row.tehH1]);
   }
+  const footerRows = Math.max(16, sheet.morningShortage.length + 1, sheet.eveningShortage.length + 1);
   aoa.push([
     "",
     "نام",
@@ -78,13 +92,17 @@ export function buildPrintAoA(sheet: PrintSheet): (string | number)[][] {
     shortageLabel("evening", sheet.eveningShift),
     "نام",
   ]);
-  for (let i = 1; i < 16; i++) aoa.push(["", "", "", "", "", "", "", ""]);
+  for (let i = 0; i < footerRows - 1; i++) {
+    const morning = sheet.morningShortage[i] ?? "";
+    const evening = sheet.eveningShortage[i] ?? "";
+    aoa.push(["", evening, "", morning, "", "", "", ""]);
+  }
   return aoa;
 }
 
-export function printMerges(dataRowCount: number): { s: { r: number; c: number }; e: { r: number; c: number } }[] {
+export function printMerges(dataRowCount: number, footerRowCount = 16): { s: { r: number; c: number }; e: { r: number; c: number } }[] {
   const footer = 3 + dataRowCount;
-  const footerEnd = footer + 15;
+  const footerEnd = footer + footerRowCount - 1;
   return [
     { s: { r: 1, c: 1 }, e: { r: 1, c: 3 } },
     { s: { r: 1, c: 5 }, e: { r: 1, c: 7 } },
@@ -99,7 +117,10 @@ export async function appendPrintSheet(wb: ReturnType<XLSXModule["utils"]["book_
   const XLSX = await loadXlsx();
   const aoa = buildPrintAoA(sheet);
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!merges"] = printMerges(sheet.rows.length);
+  ws["!merges"] = printMerges(
+    sheet.rows.length,
+    Math.max(16, sheet.morningShortage.length + 1, sheet.eveningShortage.length + 1),
+  );
   ws["!cols"] = [
     { wch: 10 },
     { wch: 18 },

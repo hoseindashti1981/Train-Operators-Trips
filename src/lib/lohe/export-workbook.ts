@@ -1,5 +1,6 @@
 import { roleLabel, stationLabel } from "./normalize";
 import { appendPrintSheet, buildPrintSheet } from "./print-sheet";
+import type { KasriResult } from "./kasri";
 import type { ProcessResult, SlotAssignment } from "./types";
 import { loadXlsx, type XLSXModule } from "./xlsx-load";
 
@@ -21,7 +22,7 @@ function ids(slot: SlotAssignment | null, kind: "masters" | "slaves"): string {
     .join(" / ");
 }
 
-export async function buildExportWorkbook(result: ProcessResult) {
+export async function buildExportWorkbook(result: ProcessResult, kasri?: KasriResult | null) {
   const XLSX = await loadXlsx();
   const wb = XLSX.utils.book_new();
   const rows = result.timetableRows;
@@ -143,7 +144,34 @@ export async function buildExportWorkbook(result: ProcessResult) {
   XLSX.utils.book_append_sheet(wb, s2, "گزارش راهبران");
   XLSX.utils.book_append_sheet(wb, s3, "جزئیات اعزام");
   XLSX.utils.book_append_sheet(wb, s4, "هشدارها");
-  await appendPrintSheet(wb, buildPrintSheet(result));
+  await appendPrintSheet(wb, buildPrintSheet(result, { kasri: kasri ?? null, duty: kasri?.duty }));
+  if (kasri) {
+    const kasriAoA: (string | number)[][] = [
+      [`کسری و اضافه‌کار — صبح ${kasri.duty.morning} / عصر ${kasri.duty.evening}`],
+      ["نوع", "نام", "نام خانوادگی", "شماره پرسنلی", "نوع شیفت", "محل کار"],
+    ];
+    for (const p of kasri.morningMissing) {
+      kasriAoA.push(["کسری صبح", p.firstName, p.lastName, p.personnelId, p.letter, p.workplace]);
+    }
+    for (const p of kasri.eveningMissing) {
+      kasriAoA.push(["کسری عصر", p.firstName, p.lastName, p.personnelId, p.letter, p.workplace]);
+    }
+    for (const p of kasri.overtime) {
+      kasriAoA.push(["اضافه‌کار", p.firstName, p.lastName, p.personnelId, p.letter, p.workplace]);
+    }
+    if (kasriAoA.length === 2) kasriAoA.push(["info", "", "", "", "", "کسری یا اضافه‌کاری ثبت نشد."]);
+    const s5 = XLSX.utils.aoa_to_sheet(kasriAoA);
+    s5["!cols"] = [
+      { wch: 14 },
+      { wch: 16 },
+      { wch: 22 },
+      { wch: 14 },
+      { wch: 10 },
+      { wch: 18 },
+    ];
+    freeze(s5, 2);
+    XLSX.utils.book_append_sheet(wb, s5, "کسری");
+  }
   return wb;
 }
 
@@ -157,9 +185,9 @@ function rtlBook(XLSX: XLSXModule, wb: ReturnType<XLSXModule["utils"]["book_new"
   void XLSX;
 }
 
-export async function downloadWorkbook(result: ProcessResult): Promise<void> {
+export async function downloadWorkbook(result: ProcessResult, kasri?: KasriResult | null): Promise<void> {
   const XLSX = await loadXlsx();
-  const wb = await buildExportWorkbook(result);
+  const wb = await buildExportWorkbook(result, kasri);
   const date = (result.meta.processDate || "export").replace(/\//g, "-");
   XLSX.writeFile(wb, `lohe-pardazesh-${date}.xlsx`);
 }

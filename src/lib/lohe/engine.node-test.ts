@@ -285,4 +285,39 @@ describe("lohe engine", () => {
     assert.ok(wb.SheetNames.includes("کسری"));
     assert.ok(wb.SheetNames.includes("لوحه چاپ"));
   });
+
+  it("eternal shift calendar matches the 1405/07 sample week", async () => {
+    const { jalaliToGregorian, gregorianToJalali, formatJalali } = await import("./jalali");
+    const { dayShiftFromJalaliString, dayShiftOn, SHIFT_ANCHOR } = await import("./shift-calendar");
+    const [gy, gm, gd] = jalaliToGregorian(SHIFT_ANCHOR.jy, SHIFT_ANCHOR.jm, SHIFT_ANCHOR.jd);
+    const back = gregorianToJalali(gy, gm, gd);
+    assert.equal(formatJalali(back), "1405/07/07");
+
+    const samples: [string, number, string, string, string, string][] = [
+      ["1405/07/07", 1, "B", "A", "C", "سه‌شنبه"],
+      ["1405/07/08", 2, "B", "A", "C", "چهارشنبه"],
+      ["1405/07/09", 1, "A", "C", "B", "پنجشنبه"],
+      ["1405/07/10", 2, "A", "C", "B", "جمعه"],
+      ["1405/07/11", 1, "C", "B", "A", "شنبه"],
+      ["1405/07/12", 2, "C", "B", "A", "یکشنبه"],
+    ];
+    for (const [iso, block, morning, evening, rest, weekday] of samples) {
+      const day = dayShiftFromJalaliString(iso);
+      assert.ok(day, iso);
+      assert.equal(day!.blockDay, block, iso);
+      assert.equal(day!.morning, morning, iso);
+      assert.equal(day!.evening, evening, iso);
+      assert.equal(day!.rest, rest, iso);
+      assert.equal(day!.weekdayName, weekday, iso);
+    }
+    const again = dayShiftOn({ jy: 1405, jm: 7, jd: 13 });
+    assert.equal(again.morning, "B");
+    assert.equal(again.evening, "A");
+    assert.equal(again.blockDay, 1);
+    const d1 = dayShiftFromJalaliString("1405/07/07")!;
+    assert.equal(d1.groups12, 3);
+    const d2 = dayShiftFromJalaliString("1405/07/08")!;
+    assert.equal(d2.early12, d2.night12);
+    assert.equal(d2.groups12, 2);
+  });
 });

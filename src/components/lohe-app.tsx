@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  CalendarDays,
   Clock3,
   Download,
   FileSpreadsheet,
@@ -16,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { HoursEditor } from "@/components/hours-editor";
 import { LohePrintSurface, printLohe } from "@/components/lohe-print";
+import { ShiftCalendar } from "@/components/shift-calendar";
 import { PwaBar } from "@/components/pwa-bar";
 import { cn } from "@/lib/utils";
 import { GITHUB_PWA_URL } from "@/lib/pwa/register";
@@ -25,11 +27,14 @@ import {
   cloneDefaultBook,
   computeKasri,
   dayKindLabel,
+  dayShiftFromJalaliString,
+  dayShiftOn,
   DEFAULT_DUTY,
   downloadWorkbook,
+  dutyFromDayShift,
   faNum,
   isOvertimeMember,
-  loadDuty,
+  jalaliToday,
   loadPersonnelBook,
   loadTimetableBook,
   parsePersonnelWorkbook,
@@ -44,6 +49,7 @@ import {
   type CrewMember,
   type DayKind,
   type DriverRow,
+  type JalaliDate,
   type KasriResult,
   type PersonnelBook,
   type ProcessResult,
@@ -55,7 +61,7 @@ import {
   type TimetableRow,
 } from "@/lib/lohe";
 
-type TabId = "roster" | "drivers" | "detail" | "warnings" | "hours" | "kasri";
+type TabId = "roster" | "drivers" | "detail" | "warnings" | "hours" | "kasri" | "calendar";
 type DayChoice = "auto" | DayKind;
 
 const TABS: { id: TabId; label: string }[] = [
@@ -64,6 +70,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "detail", label: "جزئیات اعزام" },
   { id: "warnings", label: "هشدارها" },
   { id: "kasri", label: "کسری شیفت" },
+  { id: "calendar", label: "تقویم شیفت" },
   { id: "hours", label: "ساعات خروجی" },
 ];
 
@@ -96,10 +103,13 @@ export function LoheApp() {
   const [book, setBook] = useState<TimetableBook>(() => cloneDefaultBook());
   const [personnel, setPersonnel] = useState<PersonnelBook | null>(null);
   const [duty, setDuty] = useState<ShiftDuty>(() => ({ ...DEFAULT_DUTY }));
+  const [pickedDate, setPickedDate] = useState<JalaliDate | null>(null);
 
   useEffect(() => {
     setBook(loadTimetableBook());
-    setDuty(loadDuty());
+    const today = dayShiftOn(jalaliToday());
+    setDuty(dutyFromDayShift(today));
+    setPickedDate({ jy: today.jy, jm: today.jm, jd: today.jd });
     const saved = loadPersonnelBook();
     if (saved) setPersonnel(saved);
     else void loadSamplePersonnel();
@@ -132,9 +142,19 @@ export function LoheApp() {
     return computeKasri(result, personnel.people, duty);
   }, [result, personnel, duty]);
 
+  const calendarDay = useMemo(() => {
+    if (pickedDate) return dayShiftFromJalaliString(`${pickedDate.jy}/${pickedDate.jm}/${pickedDate.jd}`);
+    return dayShiftFromJalaliString(result?.meta.processDate || result?.meta.reportDate || "");
+  }, [pickedDate, result]);
+
   function applyDuty(next: ShiftDuty) {
     setDuty(next);
     saveDuty(next);
+  }
+
+  function applyCalendarDay(day: NonNullable<ReturnType<typeof dayShiftFromJalaliString>>) {
+    setPickedDate({ jy: day.jy, jm: day.jm, jd: day.jd });
+    applyDuty(dutyFromDayShift(day));
   }
 
   function applyBook(next: TimetableBook) {
@@ -168,6 +188,8 @@ export function LoheApp() {
       const processed = await processWorkbook(buf, file.name, override, book);
       setResult(processed);
       setFileLabel(file.name);
+      const fromDate = dayShiftFromJalaliString(processed.meta.processDate || processed.meta.reportDate);
+      if (fromDate) applyCalendarDay(fromDate);
       setTab("roster");
       toast.success(`${faNum(processed.stats.namedTripCount)} اعزام از ${file.name} پردازش شد`);
     } catch (err) {
@@ -188,6 +210,8 @@ export function LoheApp() {
       const processed = await processWorkbook(buf, "اولیه 3.xls", dayChoice, book);
       setResult(processed);
       setFileLabel("نمونه: اولیه 3.xls");
+      const fromDate = dayShiftFromJalaliString(processed.meta.processDate || processed.meta.reportDate);
+      if (fromDate) applyCalendarDay(fromDate);
       setTab("roster");
       toast.success("نمونه گزارش روزانه بارگذاری شد");
     } catch (err) {
@@ -385,6 +409,11 @@ export function LoheApp() {
                   <option value="C">C</option>
                 </select>
               </label>
+              {calendarDay ? (
+                <p className="text-xs text-muted-foreground">
+                  تقویم: روز {calendarDay.blockDay} · استراحت {calendarDay.rest} · ۱۲ صبح‌زود {calendarDay.early12}
+                </p>
+              ) : null}
               <label className="flex h-11 items-center gap-2 rounded-[var(--radius-sm)] border border-border bg-elevated px-3 text-sm">
                 <input
                   type="checkbox"
@@ -394,6 +423,13 @@ export function LoheApp() {
                 />
                 نمایش راهبر آموزشی
               </label>
+              <Button
+                variant={tab === "calendar" ? "default" : "outline"}
+                onClick={() => setTab(tab === "calendar" ? "roster" : "calendar")}
+              >
+                <CalendarDays />
+                تقویم شیفت
+              </Button>
               <Button
                 variant={tab === "hours" ? "default" : "outline"}
                 onClick={() => setTab(tab === "hours" ? "roster" : "hours")}
@@ -413,7 +449,13 @@ export function LoheApp() {
           </div>
         )}
 
-        {!result && !busy && tab !== "hours" && <EmptyGuide onDemo={() => void loadDemo()} onHours={() => setTab("hours")} />}
+        {!result && !busy && tab !== "hours" && tab !== "calendar" && (
+          <EmptyGuide
+            onDemo={() => void loadDemo()}
+            onHours={() => setTab("hours")}
+            onCalendar={() => setTab("calendar")}
+          />
+        )}
 
         {tab === "hours" && (
           <div className="mt-6">
@@ -421,7 +463,13 @@ export function LoheApp() {
           </div>
         )}
 
-        {result && tab !== "hours" && (
+        {tab === "calendar" && (
+          <div className="mt-6">
+            <ShiftCalendar selected={pickedDate} onSelect={applyCalendarDay} />
+          </div>
+        )}
+
+        {result && tab !== "hours" && tab !== "calendar" && (
           <>
             <StatsRow result={result} kasri={kasri} />
 
@@ -438,6 +486,7 @@ export function LoheApp() {
                     )}
                   >
                     {item.id === "hours" ? <Clock3 className="me-1 inline size-3.5" /> : null}
+                    {item.id === "calendar" ? <CalendarDays className="me-1 inline size-3.5" /> : null}
                     {item.label}
                     {item.id === "kasri" && kasri ? (
                       <span className="ms-1 text-xs opacity-80">
@@ -486,7 +535,15 @@ export function LoheApp() {
   );
 }
 
-function EmptyGuide({ onDemo, onHours }: { onDemo: () => void; onHours: () => void }) {
+function EmptyGuide({
+  onDemo,
+  onHours,
+  onCalendar,
+}: {
+  onDemo: () => void;
+  onHours: () => void;
+  onCalendar: () => void;
+}) {
   return (
     <div className="mt-8 space-y-4">
       <div className="grid gap-4 md:grid-cols-3">
@@ -500,8 +557,8 @@ function EmptyGuide({ onDemo, onHours }: { onDemo: () => void; onHours: () => vo
             body: "فقط ساعت‌هایی که در لوحه خروجی نوشته‌اید پر می‌شوند. از بخش ساعات خروجی می‌توانید لیست را عوض کنید.",
           },
           {
-            title: "۳. کسری و اضافه‌کار",
-            body: "لیست پرسنل خط ۵ را یک‌بار بارگذاری کنید. صبحکار و عصرکار را انتخاب کنید؛ کسری و اضافه‌کار از همان لوحه محاسبه می‌شود.",
+            title: "۳. کسری و تقویم شیفت",
+            body: "لیست پرسنل یک‌بار بار می‌شود. تقویم ابدی از تاریخ فایل می‌فهمد صبحکار/عصرکار و روز ۱ یا ۲ کیست.",
           },
         ].map((card) => (
           <article key={card.title} className="rounded-[var(--radius-xl)] border border-border bg-surface p-5">
@@ -518,6 +575,10 @@ function EmptyGuide({ onDemo, onHours }: { onDemo: () => void; onHours: () => vo
         <Button variant="outline" onClick={onHours}>
           <Clock3 />
           ویرایش ساعت‌های خروجی
+        </Button>
+        <Button variant="outline" onClick={onCalendar}>
+          <CalendarDays />
+          تقویم شیفت
         </Button>
       </div>
       <p className="pt-2 text-center text-xs leading-relaxed text-muted-foreground">

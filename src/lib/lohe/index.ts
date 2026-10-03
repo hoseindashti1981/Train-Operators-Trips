@@ -7,6 +7,7 @@ export * from "./process";
 export * from "./export-workbook";
 export * from "./personnel";
 export * from "./kasri";
+export * from "./shift-calendar";
 export * from "./print-sheet";
 export * from "./driver-report";
 export * from "./match";
